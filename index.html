@@ -13,6 +13,7 @@ label{display:block;color:var(--muted);font-size:.9rem;margin-bottom:6px}input{w
 button{border:0;border-radius:11px;padding:12px 17px;background:var(--accent);color:#272033;font-weight:750;font:inherit;cursor:pointer}button:hover{filter:brightness(1.07);transform:translateY(-1px)}button.secondary{background:#303a60;color:white;border:1px solid #ffffff24}.actions{display:flex;gap:10px;flex-wrap:wrap}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:12px;margin-top:22px}.object{aspect-ratio:1/1;display:grid;place-items:center;background:linear-gradient(145deg,#5669ac,#36477d);border:1px solid #ffffff35;border-radius:16px;color:white;font-size:1.1rem;font-weight:700;cursor:pointer;box-shadow:0 6px 13px #0003;transition:.18s}.object:hover{transform:translateY(-3px);background:linear-gradient(145deg,#7185ca,#465994)}.object.open{cursor:default;background:#252c48;border-color:#ffffff20;transform:none}.object.win{background:linear-gradient(145deg,#297a67,#175345);border-color:var(--good);color:#e8fff5}.object.empty{opacity:.65}
 #status{min-height:30px;margin:18px 0 0;font-weight:700}#status.good{color:var(--good)}#status.bad{color:var(--bad)}.hint{font-size:.88rem;margin-top:18px}.hidden{display:none}
+#confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:9999}
 </style>
 </head>
 <body><main><section class="box">
@@ -35,12 +36,48 @@ function begin(){
  if(!Number.isInteger(n)||n<2||n>100){status.className='bad';status.textContent='Escolha uma quantidade entre 2 e 100.';return}
  if(!label){status.className='bad';status.textContent='Digite o nome do prêmio.';return}
  prizeName=label;hiddenIndex=Math.floor(Math.random()*n);opened=new Set();grid.innerHTML='';status.className='';status.textContent='Sorteio pronto! Escolha um objeto.';
- for(let i=0;i<n;i++){const b=document.createElement('button');b.className='object';b.type='button';b.textContent=`? ${i+1}`;b.setAttribute('aria-label',`Objeto ${i+1}, fechado`);b.addEventListener('click',()=>reveal(i,b));grid.appendChild(b)}
+ for(let i=0;i<n;i++){const b=document.createElement('button');b.className='object';b.type='button';b.textContent=`? \({i+1}`;b.setAttribute('aria-label',`Objeto \){i+1}, fechado`);b.addEventListener('click',()=>reveal(i,b));grid.appendChild(b)}
 }
 function reveal(i,b){if(hiddenIndex<0||opened.has(i))return;opened.add(i);b.classList.add('open');b.disabled=true;
- if(i===hiddenIndex){b.classList.add('win');b.textContent=`🎉 ${prizeName}`;b.setAttribute('aria-label',`Objeto ${i+1}: ${prizeName}`);status.className='good';status.textContent=`Parabéns! O prêmio foi encontrado: ${prizeName}.`}
+ if(i===hiddenIndex){b.classList.add('win');b.textContent=`🎉 \({prizeName}`;b.setAttribute('aria-label',`Objeto \){i+1}: \({prizeName}`);status.className='good';status.textContent=`Parabéns! O prêmio foi encontrado: \){prizeName}.`}
  else{b.classList.add('empty');b.textContent='🙈 Não foi desta vez';b.setAttribute('aria-label',`Objeto ${i+1}: sem prêmio`);status.className='';status.textContent='Este objeto não tinha o prêmio. Escolha outro!'}
 }
+function celebrateOpening(){
+ const canvas=document.createElement('canvas');canvas.id='confetti';canvas.setAttribute('aria-hidden','true');document.body.appendChild(canvas);
+ const ctx=canvas.getContext('2d');if(!ctx)return;
+ let width,height,rafId;const pieces=[];const colors=['#ffd166','#71e3b2','#ff8292','#8ec5ff','#c7a4ff','#ffffff'];
+ function resize(){const dpr=window.devicePixelRatio||1;width=window.innerWidth;height=window.innerHeight;canvas.width=width*dpr;canvas.height=height*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}
+ resize();window.addEventListener('resize',resize,{passive:true});
+ for(let i=0;i<150;i++)pieces.push({x:Math.random()*width,y:-Math.random()*height*.65,w:5+Math.random()*7,h:7+Math.random()*9,vx:(Math.random()-.5)*3,vy:2+Math.random()*4,rotation:Math.random()*Math.PI,spin:(Math.random()-.5)*.16,color:colors[i%colors.length]});
+ const started=performance.now(),duration=4200;
+ function frame(now){const elapsed=now-started;ctx.clearRect(0,0,width,height);for(const p of pieces){p.x+=p.vx;p.y+=p.vy;p.rotation+=p.spin;p.vy+=.025;if(p.x<-20)p.x=width+20;if(p.x>width+20)p.x=-20;ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.rotation);ctx.fillStyle=p.color;ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);ctx.restore()}if(elapsed<duration)rafId=requestAnimationFrame(frame);else{ctx.clearRect(0,0,width,height);canvas.remove();window.removeEventListener('resize',resize)}}
+ rafId=requestAnimationFrame(frame);
+}
+window.addEventListener('load',celebrateOpening,{once:true});
+let openingAudioCtx=null, openingSoundPlayed=false;
+async function playOpeningSound(){
+ if(openingSoundPlayed)return;
+ try{
+  const AudioContextClass=window.AudioContext||window.webkitAudioContext;
+  if(!AudioContextClass)return;
+  if(!openingAudioCtx)openingAudioCtx=new AudioContextClass();
+  if(openingAudioCtx.state==='suspended')await openingAudioCtx.resume();
+  if(openingAudioCtx.state!=='running'||openingSoundPlayed)return;
+  openingSoundPlayed=true;
+  const now=openingAudioCtx.currentTime;
+  [659.25,783.99,987.77].forEach((frequency,index)=>{
+   const start=now+index*.13,osc=openingAudioCtx.createOscillator(),gain=openingAudioCtx.createGain();
+   osc.type='sine';osc.frequency.value=frequency;
+   gain.gain.setValueAtTime(.0001,start);gain.gain.exponentialRampToValueAtTime(.12,start+.025);gain.gain.exponentialRampToValueAtTime(.0001,start+.38);
+   osc.connect(gain);gain.connect(openingAudioCtx.destination);osc.start(start);osc.stop(start+.4);
+  });
+ }catch(e){/* O navegador pode bloquear áudio automático. */}
+}
+window.addEventListener('load',()=>{
+ playOpeningSound();
+ const unlock=()=>{playOpeningSound();window.removeEventListener('pointerdown',unlock);window.removeEventListener('keydown',unlock)};
+ window.addEventListener('pointerdown',unlock);window.addEventListener('keydown',unlock);
+},{once:true});
 document.querySelector('#start').addEventListener('click',begin);
 document.querySelector('#reset').addEventListener('click',()=>{if(hiddenIndex<0){begin();return}begin()});
 </script></body></html>
